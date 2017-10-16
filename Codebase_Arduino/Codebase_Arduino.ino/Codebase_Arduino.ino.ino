@@ -66,7 +66,7 @@ void setup() {
    delay(500);
   
    // Start Serial communications so we can do output. 
-   Serial.begin(115200);
+   Serial.begin(9600);
    Serial.println(F("Welcome to the Rave Light Show!"));
    
   
@@ -90,13 +90,17 @@ void setup() {
   
   Serial.println("Resetting Bluetooth Module:");
 
-  if (!ble.factoryReset()) {
-    error(F("Unable to factory reset"));
-  }
+//  if (!ble.factoryReset()) {
+//    error(F("Unable to factory reset"));
+//  }
+
+  ble.info();
 
   // Wait for the incomming bluetooth connexion
   Serial.println("Waiting for connection...");
+  
   while (! ble.isConnected()) {
+    Serial.println(F("Stallin like Stalin!"));
     delay(500);
   }
 
@@ -132,13 +136,7 @@ void loop() {
   while(ADCSRA & _BV(ADIE));  // Wait for audio sampling to finish
   samplePos = 0;              // Reset Sample Counter
   ADCSRA |= _BV(ADIE);        // Resumes the sampling interrupt
-
-  // Test mic output
-  for (i = 0; i < 12899; i++) {
-    Serial.println(capture[i]);
-  }
   
-
   ble.println("AT+BLEUARTRX");  // Data receive command
   ble.readline();               // Reads lines into our buffer!
 
@@ -149,26 +147,25 @@ void loop() {
       // Debug output to ensure that we've received the colours correctly!   
       Serial.println("Colours for this loop around");
       for(i = 0; i < 3 * NUM_COLOURS; i++) {
-        Serial.println(colour[i], HEX);   // Hex printing makes colours easy to check!
+        Serial.println(ble.buffer[i], HEX);   // Hex printing makes colours easy to check!
       }
   }
   
       
 
-  // TODO: Verify that this approach is indeed efficient. We simply send one value
-  // at a bloody time. 
-  ble.println("AT+BLEUARTTX");
-  for (i = 0; i < FFT_N; i++) {
-    ble.print(capture[i]);    // Print the ith value of capture
-
-    // Waiting to ensure that we are okay w.r.t. seding our data
-    if (! ble.waitForOK()) {
-    error(F("Failed to send buffer"));
-    }
-  }
-
-  // TODO: Here's where we do lighting!
+//  // TODO: Verify that this approach is indeed efficient. We simply send one value
+//  // at a bloody time. 
+//  ble.println("AT+BLEUARTTX");
+//  for (i = 0; i < FFT_N; i++) {
+//    ble.print(capture[i]);    // Print the ith value of capture
+//  }
+//
+//    // Waiting to ensure that we are okay w.r.t. seding our data
+//    if (! ble.waitForOK()) {
+//    Serial.println(F("Failed to send buffer"));
+//    }
 }
+
 
 /*
  * Below is an interrupt service routine
