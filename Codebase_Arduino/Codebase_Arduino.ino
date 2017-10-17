@@ -11,7 +11,7 @@
  *    - Bluetooth LE module
  *    - Adafruit Electret Microphone Amplifier
  * 
- * Original Authors: Rocky Petkov, (Add your name here)
+ * Original Authors: Rocky Petkov, Jack Qiao
  */
 
 #include <math.h>
@@ -20,6 +20,7 @@
 #include <Adafruit_BLE.h>
 #include <SPI.h>
 #include <Adafruit_ATParser.h>
+
 #include "BluefruitConfig.h"
 
 #if SOFTWARE_SERIAL_AVAILABLE
@@ -38,12 +39,16 @@
 int16_t capture[FFT_N];                   // Audio Capture Buffers
 volatile byte samplePos = 0;              // Position Counter for the Buffer
 
+// A couple globals which are useful for processing incomming colours. 
+const char *delimiters = {"[,]"};    // Delimiters for splitting strings
+char       *pch;                            // Pointer to the lead character in our string
+
 // TODO: NeoPixel Variables
 uint8_t colour[3 * NUM_COLOURS] = {0, 0, 0};    // Three values for each colour. Initialise it to 0. 
 
 // Some Basic Bluetooth Things
-
-Adafruit_BluefruitLE_UART ble(Serial1, BLUEFRUIT_UART_MODE_PIN);
+#define BLUEFRUIT_HWSERIAL_NAME           Serial1
+Adafruit_BluefruitLE_UART ble(BLUEFRUIT_HWSERIAL_NAME, BLUEFRUIT_UART_MODE_PIN);
 
 /*
  * A small helper to let us know if there is an error
@@ -66,10 +71,41 @@ void setup() {
    delay(500);
   
    // Start Serial communications so we can do output. 
-   Serial.begin(115200);
+   Serial.begin(9600);
    Serial.println(F("Welcome to the Rave Light Show!"));
    
+  // Factory reset the bluetooth module so that everything is in a safe place
+  // First need to begin verbose mode, or factory reset wont work.
+  if ( !ble.begin(VERBOSE_MODE) )
+  {
+    error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
+  }
   
+  Serial.println( F("OK!") );
+
+  if ( FACTORYRESET_ENABLE )
+  {
+    Serial.println("Resetting Bluetooth Module:");
+    if (!ble.factoryReset()) {
+      error(F("Unable to factory reset"));
+    }
+  }
+  /* Disable command echo from Bluefruit 
+     Need to disable this to establish connection. */
+  ble.echo(false);
+  ble.verbose(false);  // debug info is a little annoying after this point!
+  Serial.println("Requesting Bluefruit info:");
+  ble.info();
+
+  // Wait for the incomming bluetooth connexion
+  Serial.println("Waiting for connection...");
+  
+  while (! ble.isConnected()) {
+    Serial.println(F("Stallin like Stalin!"));
+    delay(500);
+  }
+
+  Serial.println("Enabling Free Run Mode");
   // Init ADC free-run mode; f = ( 16MHz/prescaler ) / 13 cycles/conversion 
   ADMUX  = MIC_ADC_CHANNEL; // Channel sel, right-adj, use AREF pin
   ADCSRA = _BV(ADEN)  | // ADC enable
@@ -82,26 +118,6 @@ void setup() {
   TIMSK0 = 0;                // Timer0 off
 
   sei();  // Enabling interrupts. 
-
-  
-
-  // Factory reset the bluetooth module so that everything is in a safe place
-
-  
-  Serial.println("Resetting Bluetooth Module:");
-
-  if (!ble.factoryReset()) {
-    error(F("Unable to factory reset"));
-  }
-
-//  // Wait for the incomming bluetooth connexion
-//  Serial.println("Waiting for connection...");
-//  while (! ble.isConnected()) {
-//    delay(500);
-//  }
-
-  // Disabling command echo from Bluefruit
-  ble.echo(false);
 
   Serial.println("\n\nBeginning Main Loop...");
 }
@@ -126,49 +142,51 @@ void setup() {
  *      We have somewhat limited memory to work with. This is unfortunate. 
  */
 void loop() {
-  int i;                                          // A loop counter for some development display type stuff
+  
+  int i, j;                                       // Loop counters
   uint8_t bytesRead;                              // No. of bytes read to the buffer
+
   
   while(ADCSRA & _BV(ADIE));  // Wait for audio sampling to finish
   samplePos = 0;              // Reset Sample Counter
   ADCSRA |= _BV(ADIE);        // Resumes the sampling interrupt
-
-  // Test mic output
-  for (i = 0; i < 12899; i++) {
-    println(capture[i]);
-  }
   
+  // Check for incoming characters from Bluefruit
+  ble.println("AT+BLEUARTRX");
+  ble.readline();
+  if (strcmp(ble.buffer, "OK") == 0) {
+    // no data
+  }
+    else {
+    // Converting byte string into integers
+    pch = strtok(ble.buffer, delimiters);
+    i = 0;
+    // While loop terminates when we run out of tokens or we have read more than 3 tokens
+    while (pch != NULL || i < (3 * NUM_COLOURS)) {
+      colour[i] = atoi(pch);    // Translate pch into an int and store in colour
+      Serial.println(colour[i], HEX);
+      pch = strtok(NULL, delimiters);
+      i++;
+    }
+    ble.waitForOK();
+  }
 
-//  ble.println("AT+BLEUARTRX");  // Data receive command
-//  ble.readline();               // Reads lines into our buffer!
-//
-//  // Check if there is data. If so write it to colours!
-//  if (strcmp(ble.buffer, "OK") != 0) {
-//      memcpy(colour, ble.buffer, 3 * NUM_COLOURS);    // Copy colour information to the colours buffer
-//  
-//      // Debug output to ensure that we've received the colours correctly!   
-//      Serial.println("Colours for this loop around");
-//      for(i = 0; i < 3 * NUM_COLOURS; i++) {
-//        Serial.println(colour[i], HEX);   // Hex printing makes colours easy to check!
-//      }
-//  }
-//  
-//      
-//
-//  // TODO: Verify that this approach is indeed efficient. We simply send one value
-//  // at a bloody time. 
-//  ble.println("AT+BLEUARTTX");
-//  for (i = 0; i < FFT_N; i++) {
-//    ble.print(capture[i]);    // Print the ith value of capture
-//
-//    // Waiting to ensure that we are okay w.r.t. seding our data
-//    if (! ble.waitForOK()) {
-//    error(F("Failed to send buffer"));
-//    }
-//  }
+  Serial.println("Sending...");
+  // Sending one number at a time. 
+  for (j = 0; j < FFT_N; j++) {
+    ble.print("AT+BLEUARTTX=");
+    ble.print(capture[j]);    // Print the ith value of capture
+    ble.println(",");           // Add in a comma for easy parsing on the python end. 
 
-  // TODO: Here's where we do lighting!
+    // Waiting to ensure that we are okay w.r.t. seding our data
+    if (! ble.waitForOK()) {
+    Serial.println(F("Failed to send buffer."));
+    }
+  }
+
+
 }
+
 
 /*
  * Below is an interrupt service routine
@@ -178,7 +196,7 @@ void loop() {
 ISR(ADC_vect) { 
     static const int16_t noiseThreshold = 4;  // We can play around with this. We don't want to have lights run on ambient nothing!
     int16_t sample = ADC; // Raw voltage over the wire. 0 corresponds to 0 volts. 1023 corresponds to ~5v.
-
+    
     // Normalise our samples around 0 for the DFT
     capture[samplePos] = 
       ((sample > (512 - noiseThreshold)) &&
