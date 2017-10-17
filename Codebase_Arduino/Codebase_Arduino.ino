@@ -100,10 +100,10 @@ void setup() {
   // Wait for the incomming bluetooth connexion
   Serial.println("Waiting for connection...");
   
-  while (! ble.isConnected()) {
-    Serial.println(F("Stallin like Stalin!"));
-    delay(500);
-  }
+//  while (! ble.isConnected()) {
+//    Serial.println(F("Stallin like Stalin!"));
+//    delay(500);
+//  }
 
   Serial.println("Enabling Free Run Mode");
   // Init ADC free-run mode; f = ( 16MHz/prescaler ) / 13 cycles/conversion 
@@ -150,39 +150,44 @@ void loop() {
   while(ADCSRA & _BV(ADIE));  // Wait for audio sampling to finish
   samplePos = 0;              // Reset Sample Counter
   ADCSRA |= _BV(ADIE);        // Resumes the sampling interrupt
+
+  // Temporary for loop to read frequencies.
+  for (i = 0; i < FFT_N; i++) {
+    Serial.println(capture[i], DEC);
+  }
   
-  // Check for incoming characters from Bluefruit
-  ble.println("AT+BLEUARTRX");
-  ble.readline();
-  if (strcmp(ble.buffer, "OK") == 0) {
-    // no data
-  }
-    else {
-    // Converting byte string into integers
-    pch = strtok(ble.buffer, delimiters);
-    i = 0;
-    // While loop terminates when we run out of tokens or we have read more than 3 tokens
-    while (pch != NULL || i < (3 * NUM_COLOURS)) {
-      colour[i] = atoi(pch);    // Translate pch into an int and store in colour
-      Serial.println(colour[i], HEX);
-      pch = strtok(NULL, delimiters);
-      i++;
-    }
-    ble.waitForOK();
-  }
-
-  Serial.println("Sending...");
-  // Sending one number at a time. 
-  for (j = 0; j < FFT_N; j++) {
-    ble.print("AT+BLEUARTTX=");
-    ble.print(capture[j]);    // Print the ith value of capture
-    ble.println(",");           // Add in a comma for easy parsing on the python end. 
-
-    // Waiting to ensure that we are okay w.r.t. seding our data
-    if (! ble.waitForOK()) {
-    Serial.println(F("Failed to send buffer."));
-    }
-  }
+//  // Check for incoming characters from Bluefruit
+//  ble.println("AT+BLEUARTRX");
+//  ble.readline();
+//  if (strcmp(ble.buffer, "OK") == 0) {
+//    // no data
+//  }
+//    else {
+//    // Converting byte string into integers
+//    pch = strtok(ble.buffer, delimiters);
+//    i = 0;
+//    // While loop terminates when we run out of tokens or we have read more than 3 tokens
+//    while (pch != NULL || i < (3 * NUM_COLOURS)) {
+//      colour[i] = atoi(pch);    // Translate pch into an int and store in colour
+//      Serial.println(colour[i], HEX);
+//      pch = strtok(NULL, delimiters);
+//      i++;
+//    }
+//    ble.waitForOK();
+//  }
+//
+//  Serial.println("Sending...");
+//  // Sending one number at a time. 
+//  for (j = 0; j < FFT_N; j++) {
+//    ble.print("AT+BLEUARTTX=");
+//    ble.print(capture[j]);    // Print the ith value of capture
+//    ble.println(",");           // Add in a comma for easy parsing on the python end. 
+//
+//    // Waiting to ensure that we are okay w.r.t. seding our data
+//    if (! ble.waitForOK()) {
+//    Serial.println(F("Failed to send buffer."));
+//    }
+//  }
 
 
 }
